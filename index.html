@@ -69,10 +69,22 @@
       cursor: pointer;
       transition: all 0.2s ease;
       margin-top: auto;
+      min-width: 100px;
     }
 
     button:hover {
       box-shadow: 0 0 12px #00d9ff;
+    }
+
+    button.btn-reset {
+      background: transparent;
+      color: #ff3366;
+      border-color: #ff3366;
+    }
+
+    button.btn-reset:hover {
+      background: rgba(255, 51, 102, 0.1);
+      box-shadow: 0 0 12px #ff3366;
     }
 
     /* Canvas Display */
@@ -83,12 +95,13 @@
       height: 55vh;
       background-color: #020813;
       background-image: 
-        linear-gradient(rgba(0, 217, 255, 0.1) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 217, 255, 0.1) 1px, transparent 1px);
-      background-size: 25px 25px;
+        linear-gradient(rgba(0, 217, 255, 0.15) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 217, 255, 0.15) 1px, transparent 1px);
+      background-size: 30px 30px;
+      background-position: 0px 0px;
       border: 2px solid #00d9ff;
       border-radius: 12px;
-      box-shadow: 0 0 25px rgba(0, 217, 255, 0.2);
+      box-shadow: 0 0 35px rgba(0, 217, 255, 0.3);
       overflow: hidden;
       display: flex;
       justify-content: center;
@@ -98,7 +111,7 @@
     canvas {
       width: 100%;
       height: 100%;
-      filter: drop-shadow(0px 0px 8px #00d9ff);
+      filter: drop-shadow(0px 0px 10px #00d9ff);
     }
 
     /* Overlay Displays */
@@ -153,9 +166,9 @@
     <div class="control-group">
       <label for="tempoSelect">Rep Tempo</label>
       <select id="tempoSelect">
-        <option value="2-4">2s Concentric / 4s Eccentric (6s)</option>
-        <option value="4-4" selected>4s Concentric / 4s Eccentric (8s)</option>
-        <option value="8-8">8s Concentric / 8s Eccentric (16s)</option>
+        <option value="2-4">2/4 Tempo (8s total cycle)</option>
+        <option value="4-4" selected>4/4 Tempo (10s total cycle)</option>
+        <option value="8-8">8/8 Tempo (18s total cycle)</option>
       </select>
     </div>
 
@@ -169,19 +182,12 @@
       </select>
     </div>
 
-    <div class="control-group">
-      <label for="countdownSelect">Prep Countdown</label>
-      <select id="countdownSelect">
-        <option value="3" selected>3 Seconds</option>
-        <option value="5">5 Seconds</option>
-      </select>
-    </div>
-
-    <button id="startBtn">START WORKOUT</button>
+    <button id="startPauseBtn">START</button>
+    <button id="resetBtn" class="btn-reset">RESET</button>
   </div>
 
   <!-- EKG Display -->
-  <div class="monitor-container">
+  <div class="monitor-container" id="monitorBox">
     <canvas id="ekgCanvas"></canvas>
     <div id="countdownDisplay" class="overlay-text">3</div>
     <div id="completeDisplay" class="overlay-text">COMPLETE</div>
@@ -200,21 +206,73 @@
   </div>
 
   <script>
+    // Web Audio API Beep Generator
+    let audioCtx = null;
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function playBeep(frequency = 880, duration = 0.15) {
+      if (!audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+        
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function playDoubleBeep() {
+      playBeep(880, 0.12);
+      setTimeout(() => playBeep(880, 0.12), 180);
+    }
+
+    // Canvas & Controls Elements
     const canvas = document.getElementById('ekgCanvas');
     const ctx = canvas.getContext('2d');
-    const startBtn = document.getElementById('startBtn');
+    const monitorBox = document.getElementById('monitorBox');
+    const startPauseBtn = document.getElementById('startPauseBtn');
+    const resetBtn = document.getElementById('resetBtn');
     const tempoSelect = document.getElementById('tempoSelect');
     const durationSelect = document.getElementById('durationSelect');
-    const countdownSelect = document.getElementById('countdownSelect');
     const countdownDisplay = document.getElementById('countdownDisplay');
     const completeDisplay = document.getElementById('completeDisplay');
     const phaseText = document.getElementById('phaseText');
     const timeText = document.getElementById('timeText');
 
-    let isRunning = false;
+    let state = 'IDLE'; // 'IDLE', 'PREP', 'RUNNING', 'PAUSED', 'FINISHED'
     let animationFrameId;
     let workoutTimer;
-    let x = 0;
+    let gridOffset = 0;
+
+    let totalDuration = 90;
+    let timeRemaining = 90;
+    let halfwayPoint = 45;
+    let halfwayTriggered = false;
+
+    let prepTime = 3;
+    let prepInterval = null;
+
+    let cycleStartTime = 0;
+    let pausedTimeAccumulated = 0;
+    let lastPauseStamp = 0;
 
     function resizeCanvas() {
       canvas.width = canvas.offsetWidth;
@@ -223,96 +281,213 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    startBtn.addEventListener('click', () => {
-      if (isRunning) return;
-      startWorkoutSequence();
+    // Reset All State
+    function resetApp() {
+      state = 'IDLE';
+      clearInterval(workoutTimer);
+      clearInterval(prepInterval);
+      cancelAnimationFrame(animationFrameId);
+
+      totalDuration = parseInt(durationSelect.value);
+      timeRemaining = totalDuration;
+      halfwayPoint = Math.floor(totalDuration / 2);
+      halfwayTriggered = false;
+
+      timeText.innerText = timeRemaining + 's';
+      phaseText.innerText = 'READY';
+
+      countdownDisplay.style.display = 'none';
+      completeDisplay.style.display = 'none';
+      startPauseBtn.innerText = 'START';
+
+      pausedTimeAccumulated = 0;
+      gridOffset = 0;
+      monitorBox.style.backgroundPosition = '0px 0px';
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawStaticFlatLine();
+    }
+
+    durationSelect.addEventListener('change', resetApp);
+    resetBtn.addEventListener('click', resetApp);
+
+    startPauseBtn.addEventListener('click', () => {
+      initAudio();
+
+      if (state === 'IDLE') {
+        startPrepSequence();
+      } else if (state === 'PREP') {
+        // Do nothing during short countdown or pause prep
+      } else if (state === 'RUNNING') {
+        pauseExercise();
+      } else if (state === 'PAUSED') {
+        resumeExercise();
+      } else if (state === 'FINISHED') {
+        resetApp();
+        startPrepSequence();
+      }
     });
 
-    function startWorkoutSequence() {
-      isRunning = true;
+    function startPrepSequence() {
+      state = 'PREP';
       completeDisplay.style.display = 'none';
       phaseText.innerText = 'GET READY';
-      
-      let prepTime = parseInt(countdownSelect.value);
+      startPauseBtn.innerText = 'PAUSE';
+
+      prepTime = 3;
       countdownDisplay.innerText = prepTime;
       countdownDisplay.style.display = 'block';
 
-      const prepInterval = setInterval(() => {
+      playBeep(880, 0.15); // 3-second beep
+
+      prepInterval = setInterval(() => {
         prepTime--;
         if (prepTime > 0) {
           countdownDisplay.innerText = prepTime;
+          playBeep(880, 0.15); // Short beep for 2 and 1
         } else {
           clearInterval(prepInterval);
           countdownDisplay.style.display = 'none';
-          runMainTimer();
+          playBeep(1046.5, 0.4); // Long higher beep for commencement
+          startMainExercise();
         }
       }, 1000);
     }
 
-    function runMainTimer() {
-      let totalSeconds = parseInt(durationSelect.value);
-      timeText.innerText = totalSeconds + 's';
-      phaseText.innerText = 'WORKOUT';
+    function startMainExercise() {
+      state = 'RUNNING';
+      phaseText.innerText = 'EXERCISE';
 
-      const [concentric, eccentric] = tempoSelect.value.split('-').map(Number);
-      const cycleTimeSec = concentric + eccentric;
+      cycleStartTime = performance.now();
+      pausedTimeAccumulated = 0;
 
-      x = 0;
-      let startTime = performance.now();
+      runAnimation();
 
-      function drawFrame(now) {
-        let elapsedSec = (now - startTime) / 1000;
-        let cyclePos = elapsedSec % cycleTimeSec;
+      workoutTimer = setInterval(() => {
+        if (state !== 'RUNNING') return;
 
-        // Visual fade effect
-        ctx.fillStyle = 'rgba(2, 8, 19, 0.08)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        timeRemaining--;
+        timeText.innerText = timeRemaining + 's';
 
-        const centerY = canvas.height / 2;
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = '#00d9ff';
-        ctx.beginPath();
-        ctx.moveTo(x, centerY);
-
-        let y = centerY;
-        // Dynamic waveform mapping
-        if (cyclePos < concentric) {
-          // Concentric Rise
-          let progress = cyclePos / concentric;
-          y = centerY - (Math.sin(progress * Math.PI) * (canvas.height * 0.35));
-        } else {
-          // Eccentric Fall
-          let progress = (cyclePos - concentric) / eccentric;
-          y = centerY + (Math.sin(progress * Math.PI) * (canvas.height * 0.2));
+        // Check for Halfway Double Beep
+        if (timeRemaining === halfwayPoint && !halfwayTriggered && timeRemaining > 0) {
+          halfwayTriggered = true;
+          playDoubleBeep();
         }
 
-        x += (canvas.width / (cycleTimeSec * 60)); // Move across screen dynamically
-        if (x > canvas.width) x = 0;
+        // Finish Check
+        if (timeRemaining <= 0) {
+          finishExercise();
+        }
+      }, 1000);
+    }
 
-        ctx.lineTo(x, y);
-        ctx.stroke();
+    function pauseExercise() {
+      state = 'PAUSED';
+      phaseText.innerText = 'PAUSED';
+      startPauseBtn.innerText = 'RESUME';
+      lastPauseStamp = performance.now();
+    }
 
-        if (isRunning) {
-          animationFrameId = requestAnimationFrame(drawFrame);
+    function resumeExercise() {
+      state = 'RUNNING';
+      phaseText.innerText = 'EXERCISE';
+      startPauseBtn.innerText = 'PAUSE';
+      pausedTimeAccumulated += (performance.now() - lastPauseStamp);
+      runAnimation();
+    }
+
+    function finishExercise() {
+      state = 'FINISHED';
+      clearInterval(workoutTimer);
+      cancelAnimationFrame(animationFrameId);
+
+      phaseText.innerText = 'FINISHED';
+      completeDisplay.style.display = 'block';
+      startPauseBtn.innerText = 'START';
+
+      playBeep(659.25, 0.8); // Long finish beep
+    }
+
+    function drawStaticFlatLine() {
+      const centerY = canvas.height / 2;
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = '#00d9ff';
+      ctx.beginPath();
+      ctx.moveTo(0, centerY);
+      ctx.lineTo(canvas.width, centerY);
+      ctx.stroke();
+    }
+
+    function runAnimation() {
+      if (state !== 'RUNNING') return;
+
+      const [concentric, eccentric] = tempoSelect.value.split('-').map(Number);
+      const crestTime = 1;
+      const valleyTime = 1;
+      const totalCycleTime = concentric + crestTime + eccentric + valleyTime;
+
+      const now = performance.now();
+      const elapsedTotal = (now - cycleStartTime - pausedTimeAccumulated) / 1000;
+      const currentCyclePos = elapsedTotal % totalCycleTime;
+
+      // Scroll background grid to the left
+      gridOffset = (gridOffset - 1.5) % 30;
+      monitorBox.style.backgroundPosition = `${gridOffset}px 0px`;
+
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const centerY = canvas.height / 2;
+      const topY = canvas.height * 0.15;
+      const bottomY = canvas.height * 0.85;
+
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = '#00d9ff';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      ctx.beginPath();
+
+      // Render traveling Mountain Peak EKG line across width
+      for (let px = 0; px <= canvas.width; px += 2) {
+        // Map pixel x coordinate to time position along wave
+        const pxTimeOffset = ((canvas.width - px) / canvas.width) * (totalCycleTime * 1.5);
+        let pointPos = (currentCyclePos - pxTimeOffset) % totalCycleTime;
+        if (pointPos < 0) pointPos += totalCycleTime;
+
+        let py = bottomY;
+
+        if (pointPos < concentric) {
+          // Concentric Lift phase (Climb)
+          const progress = pointPos / concentric;
+          py = bottomY - progress * (bottomY - topY);
+        } else if (pointPos < concentric + crestTime) {
+          // 1-second Crest turnaround
+          py = topY;
+        } else if (pointPos < concentric + crestTime + eccentric) {
+          // Eccentric Lowering phase (Descent)
+          const progress = (pointPos - (concentric + crestTime)) / eccentric;
+          py = topY + progress * (bottomY - topY);
+        } else {
+          // 1-second Valley turnaround
+          py = bottomY;
+        }
+
+        if (px === 0) {
+          ctx.moveTo(px, py);
+        } else {
+          ctx.lineTo(px, py);
         }
       }
 
-      animationFrameId = requestAnimationFrame(drawFrame);
+      ctx.stroke();
 
-      // Countdown loop
-      workoutTimer = setInterval(() => {
-        totalSeconds--;
-        timeText.innerText = totalSeconds + 's';
-
-        if (totalSeconds <= 0) {
-          clearInterval(workoutTimer);
-          cancelAnimationFrame(animationFrameId);
-          isRunning = false;
-          phaseText.innerText = 'FINISHED';
-          completeDisplay.style.display = 'block';
-        }
-      }, 1000);
+      animationFrameId = requestAnimationFrame(runAnimation);
     }
+
+    // Initial load
+    resetApp();
   </script>
 </body>
 </html>
