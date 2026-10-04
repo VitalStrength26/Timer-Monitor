@@ -5,29 +5,94 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>EKG Tempo Guide</title>
   <style>
-    body {
+    * {
+      box-sizing: border-box;
       margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
       background-color: #040d1a;
+      color: #ffffff;
       display: flex;
-      justify-content: center;
+      flex-direction: column;
       align-items: center;
-      height: 100vh;
+      justify-content: space-between;
+      min-height: 100vh;
+      padding: 16px;
       overflow: hidden;
     }
 
-    /* Grid Background */
+    /* Controls Header */
+    .control-panel {
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      align-items: center;
+      background: rgba(2, 8, 19, 0.8);
+      padding: 12px 16px;
+      border: 1px solid rgba(0, 217, 255, 0.3);
+      border-radius: 8px;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #00d9ff;
+    }
+
+    select, button {
+      background: #020813;
+      color: #00d9ff;
+      border: 1px solid #00d9ff;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: bold;
+      outline: none;
+    }
+
+    button {
+      background: #00d9ff;
+      color: #020813;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-top: auto;
+    }
+
+    button:hover {
+      box-shadow: 0 0 12px #00d9ff;
+    }
+
+    /* Canvas Display */
     .monitor-container {
       position: relative;
-      width: 90vw;
-      height: 50vh;
+      width: 100%;
+      max-width: 900px;
+      height: 55vh;
       background-color: #020813;
       background-image: 
         linear-gradient(rgba(0, 217, 255, 0.1) 1px, transparent 1px),
         linear-gradient(90deg, rgba(0, 217, 255, 0.1) 1px, transparent 1px);
-      background-size: 20px 20px;
+      background-size: 25px 25px;
       border: 2px solid #00d9ff;
-      border-radius: 8px;
-      box-shadow: 0 0 20px rgba(0, 217, 255, 0.3);
+      border-radius: 12px;
+      box-shadow: 0 0 25px rgba(0, 217, 255, 0.2);
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
 
     canvas {
@@ -35,56 +100,219 @@
       height: 100%;
       filter: drop-shadow(0px 0px 8px #00d9ff);
     }
+
+    /* Overlay Displays */
+    .overlay-text {
+      position: absolute;
+      font-weight: 900;
+      text-transform: uppercase;
+      text-shadow: 0 0 20px #00d9ff;
+      pointer-events: none;
+      display: none;
+    }
+
+    #countdownDisplay {
+      font-size: 8rem;
+      color: #00d9ff;
+    }
+
+    #completeDisplay {
+      font-size: 4rem;
+      color: #00ff88;
+      text-shadow: 0 0 20px #00ff88;
+    }
+
+    /* Readout Footer */
+    .timer-readout {
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      justify-content: space-around;
+      background: rgba(2, 8, 19, 0.8);
+      border: 1px solid rgba(0, 217, 255, 0.3);
+      padding: 12px;
+      border-radius: 8px;
+    }
+
+    .readout-box {
+      text-align: center;
+    }
+
+    .readout-value {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #00d9ff;
+      font-family: monospace;
+    }
   </style>
 </head>
 <body>
 
+  <!-- Controls -->
+  <div class="control-panel">
+    <div class="control-group">
+      <label for="tempoSelect">Rep Tempo</label>
+      <select id="tempoSelect">
+        <option value="2-4">2s Concentric / 4s Eccentric (6s)</option>
+        <option value="4-4" selected>4s Concentric / 4s Eccentric (8s)</option>
+        <option value="8-8">8s Concentric / 8s Eccentric (16s)</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label for="durationSelect">Total Duration</label>
+      <select id="durationSelect">
+        <option value="30">30 Seconds</option>
+        <option value="60">60 Seconds</option>
+        <option value="90" selected>90 Seconds</option>
+        <option value="120">120 Seconds</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label for="countdownSelect">Prep Countdown</label>
+      <select id="countdownSelect">
+        <option value="3" selected>3 Seconds</option>
+        <option value="5">5 Seconds</option>
+      </select>
+    </div>
+
+    <button id="startBtn">START WORKOUT</button>
+  </div>
+
+  <!-- EKG Display -->
   <div class="monitor-container">
     <canvas id="ekgCanvas"></canvas>
+    <div id="countdownDisplay" class="overlay-text">3</div>
+    <div id="completeDisplay" class="overlay-text">COMPLETE</div>
+  </div>
+
+  <!-- Timer Readout -->
+  <div class="timer-readout">
+    <div class="readout-box">
+      <label>Phase</label>
+      <div id="phaseText" class="readout-value">READY</div>
+    </div>
+    <div class="readout-box">
+      <label>Time Remaining</label>
+      <div id="timeText" class="readout-value">90s</div>
+    </div>
   </div>
 
   <script>
     const canvas = document.getElementById('ekgCanvas');
     const ctx = canvas.getContext('2d');
+    const startBtn = document.getElementById('startBtn');
+    const tempoSelect = document.getElementById('tempoSelect');
+    const durationSelect = document.getElementById('durationSelect');
+    const countdownSelect = document.getElementById('countdownSelect');
+    const countdownDisplay = document.getElementById('countdownDisplay');
+    const completeDisplay = document.getElementById('completeDisplay');
+    const phaseText = document.getElementById('phaseText');
+    const timeText = document.getElementById('timeText');
 
-    // Set canvas internal resolution
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
-
+    let isRunning = false;
+    let animationFrameId;
+    let workoutTimer;
     let x = 0;
-    const speed = 3; // Horizontal sweep speed
-    const centerY = canvas.height / 2;
 
-    function drawEKG() {
-      ctx.fillStyle = 'rgba(2, 8, 19, 0.05)'; // Creates trailing sweep fade
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    function resizeCanvas() {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
 
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = '#00d9ff';
-      ctx.beginPath();
-      ctx.moveTo(x, centerY);
+    startBtn.addEventListener('click', () => {
+      if (isRunning) return;
+      startWorkoutSequence();
+    });
 
-      // Simple EKG pulse logic at intervals
-      let y = centerY;
-      const cycle = x % 300; // Recurs every 300px
+    function startWorkoutSequence() {
+      isRunning = true;
+      completeDisplay.style.display = 'none';
+      phaseText.innerText = 'GET READY';
+      
+      let prepTime = parseInt(countdownSelect.value);
+      countdownDisplay.innerText = prepTime;
+      countdownDisplay.style.display = 'block';
 
-      if (cycle > 50 && cycle < 70) y -= 15;        // P wave
-      else if (cycle >= 70 && cycle < 80) y += 10;  // Q wave
-      else if (cycle >= 80 && cycle < 100) y -= 120;// R spike (Concentric Peak)
-      else if (cycle >= 100 && cycle < 115) y += 40;// S wave
-      else if (cycle >= 140 && cycle < 180) y -= 30;// T wave (Eccentric Release)
-
-      x += speed;
-      if (x > canvas.width) x = 0;
-
-      ctx.lineTo(x, y);
-      ctx.stroke();
-
-      requestAnimationFrame(drawEKG);
+      const prepInterval = setInterval(() => {
+        prepTime--;
+        if (prepTime > 0) {
+          countdownDisplay.innerText = prepTime;
+        } else {
+          clearInterval(prepInterval);
+          countdownDisplay.style.display = 'none';
+          runMainTimer();
+        }
+      }, 1000);
     }
 
-    drawEKG();
+    function runMainTimer() {
+      let totalSeconds = parseInt(durationSelect.value);
+      timeText.innerText = totalSeconds + 's';
+      phaseText.innerText = 'WORKOUT';
+
+      const [concentric, eccentric] = tempoSelect.value.split('-').map(Number);
+      const cycleTimeSec = concentric + eccentric;
+
+      x = 0;
+      let startTime = performance.now();
+
+      function drawFrame(now) {
+        let elapsedSec = (now - startTime) / 1000;
+        let cyclePos = elapsedSec % cycleTimeSec;
+
+        // Visual fade effect
+        ctx.fillStyle = 'rgba(2, 8, 19, 0.08)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const centerY = canvas.height / 2;
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#00d9ff';
+        ctx.beginPath();
+        ctx.moveTo(x, centerY);
+
+        let y = centerY;
+        // Dynamic waveform mapping
+        if (cyclePos < concentric) {
+          // Concentric Rise
+          let progress = cyclePos / concentric;
+          y = centerY - (Math.sin(progress * Math.PI) * (canvas.height * 0.35));
+        } else {
+          // Eccentric Fall
+          let progress = (cyclePos - concentric) / eccentric;
+          y = centerY + (Math.sin(progress * Math.PI) * (canvas.height * 0.2));
+        }
+
+        x += (canvas.width / (cycleTimeSec * 60)); // Move across screen dynamically
+        if (x > canvas.width) x = 0;
+
+        ctx.lineTo(x, y);
+        ctx.stroke();
+
+        if (isRunning) {
+          animationFrameId = requestAnimationFrame(drawFrame);
+        }
+      }
+
+      animationFrameId = requestAnimationFrame(drawFrame);
+
+      // Countdown loop
+      workoutTimer = setInterval(() => {
+        totalSeconds--;
+        timeText.innerText = totalSeconds + 's';
+
+        if (totalSeconds <= 0) {
+          clearInterval(workoutTimer);
+          cancelAnimationFrame(animationFrameId);
+          isRunning = false;
+          phaseText.innerText = 'FINISHED';
+          completeDisplay.style.display = 'block';
+        }
+      }, 1000);
+    }
   </script>
 </body>
 </html>
-
