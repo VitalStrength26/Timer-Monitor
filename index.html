@@ -111,7 +111,7 @@
     canvas {
       width: 100%;
       height: 100%;
-      filter: drop-shadow(0px 0px 12px #00d9ff);
+      filter: drop-shadow(0px 0px 10px #00d9ff);
     }
 
     /* Overlay Displays */
@@ -166,16 +166,15 @@
     <div class="control-group">
       <label for="tempoSelect">Rep Tempo</label>
       <select id="tempoSelect">
-        <option value="2-4">2/4 Tempo (8s total cycle)</option>
-        <option value="4-4" selected>4/4 Tempo (10s total cycle)</option>
-        <option value="8-8">8/8 Tempo (18s total cycle)</option>
+        <option value="2-4">Power (2/4)</option>
+        <option value="4-4" selected>Strength (4/4)</option>
+        <option value="8-8">Medical (8/8)</option>
       </select>
     </div>
 
     <div class="control-group">
       <label for="durationSelect">Total Duration</label>
       <select id="durationSelect">
-        <option value="30">30 Seconds</option>
         <option value="60">60 Seconds</option>
         <option value="90" selected>90 Seconds</option>
         <option value="120">120 Seconds</option>
@@ -206,7 +205,7 @@
   </div>
 
   <script>
-    // Audio Context & Beeps
+    // Web Audio API Context
     let audioCtx = null;
 
     function initAudio() {
@@ -274,8 +273,9 @@
     let pausedTimeAccumulated = 0;
     let lastPauseStamp = 0;
 
-    // Track historical points for glowing trail
-    let pathHistory = [];
+    // Past path history storage for ghost trail
+    let activePath = [];
+    let ghostPaths = []; // Array of previous cycles fading out
 
     function resizeCanvas() {
       canvas.width = canvas.offsetWidth;
@@ -305,7 +305,8 @@
       pausedTimeAccumulated = 0;
       gridOffset = 0;
       monitorBox.style.backgroundPosition = '0px 0px';
-      pathHistory = [];
+      activePath = [];
+      ghostPaths = [];
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawStaticStartDot();
@@ -361,7 +362,8 @@
 
       cycleStartTime = performance.now();
       pausedTimeAccumulated = 0;
-      pathHistory = [];
+      activePath = [];
+      ghostPaths = [];
 
       runAnimation();
 
@@ -411,11 +413,9 @@
 
     function drawStaticStartDot() {
       const bottomY = canvas.height * 0.82;
-      const leftX = canvas.width * 0.08;
-
       ctx.fillStyle = '#00d9ff';
       ctx.beginPath();
-      ctx.arc(leftX, bottomY, 8, 0, Math.PI * 2);
+      ctx.arc(0, bottomY, 8, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -423,81 +423,97 @@
       if (state !== 'RUNNING') return;
 
       const [concentric, eccentric] = tempoSelect.value.split('-').map(Number);
-      const crestTime = 1;
-      const valleyTime = 1;
+      const crestTime = 0.5;  // 0.5s pause at top
+      const valleyTime = 0.5; // 0.5s pause at bottom
       const totalCycleTime = concentric + crestTime + eccentric + valleyTime;
 
       const now = performance.now();
       const elapsedTotal = (now - cycleStartTime - pausedTimeAccumulated) / 1000;
       const currentCyclePos = elapsedTotal % totalCycleTime;
 
-      // Slow grid scroll speed
+      // Slow grid scroll
       gridOffset = (gridOffset - 0.4) % 35;
       monitorBox.style.backgroundPosition = `${gridOffset}px 0px`;
 
-      // Define bounds for wave
-      const startX = canvas.width * 0.08;
-      const endX = canvas.width * 0.92;
+      // Full edge-to-edge span
+      const startX = 0;
+      const endX = canvas.width;
       const travelWidth = endX - startX;
 
       const topY = canvas.height * 0.18;
       const bottomY = canvas.height * 0.82;
 
-      // X progresses across screen along current cycle
       let headX = startX + (currentCyclePos / totalCycleTime) * travelWidth;
       let headY = bottomY;
 
-      // Smooth wave math (Climb from bottom-left corner, smooth crest, smooth descent)
+      // Smooth Wave Physics with 0.5s turnarounds
       if (currentCyclePos < concentric) {
-        // Smooth sine curve climb
         const progress = currentCyclePos / concentric;
         headY = bottomY - (1 - Math.cos(progress * Math.PI)) * 0.5 * (bottomY - topY);
       } else if (currentCyclePos < concentric + crestTime) {
-        // Hold at crest
         headY = topY;
       } else if (currentCyclePos < concentric + crestTime + eccentric) {
-        // Smooth sine curve descent
         const progress = (currentCyclePos - (concentric + crestTime)) / eccentric;
         headY = topY + (1 - Math.cos(progress * Math.PI)) * 0.5 * (bottomY - topY);
       } else {
-        // Hold at valley
         headY = bottomY;
       }
 
-      // Add head position to path trail
-      pathHistory.push({ x: headX, y: headY, time: currentCyclePos });
-
-      // Reset trail on cycle restart
-      if (pathHistory.length > 1 && headX < pathHistory[pathHistory.length - 2].x) {
-        pathHistory = [{ x: headX, y: headY, time: currentCyclePos }];
+      // Check for full cycle wrap (reset to left edge)
+      if (activePath.length > 1 && headX < activePath[activePath.length - 1].x) {
+        // Move current path to ghost history with full opacity
+        ghostPaths.push({ points: activePath, alpha: 0.35 });
+        activePath = [];
       }
 
-      // Render canvas frame
+      activePath.push({ x: headX, y: headY });
+
+      // Clear canvas for re-render
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw glowing trail
-      if (pathHistory.length > 1) {
+      // Render Ghost Paths (Past cycles fading smoothly)
+      for (let g = ghostPaths.length - 1; g >= 0; g--) {
+        const ghost = ghostPaths[g];
+        ghost.alpha -= 0.003; // Fade rate
+
+        if (ghost.alpha <= 0) {
+          ghostPaths.splice(g, 1);
+          continue;
+        }
+
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = `rgba(0, 217, 255, ${ghost.alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(ghost.points[0].x, ghost.points[0].y);
+        for (let i = 1; i < ghost.points.length; i++) {
+          ctx.lineTo(ghost.points[i].x, ghost.points[i].y);
+        }
+        ctx.stroke();
+      }
+
+      // Render Active Wave Line
+      if (activePath.length > 1) {
         ctx.lineWidth = 6;
         ctx.strokeStyle = '#00d9ff';
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.beginPath();
-        ctx.moveTo(pathHistory[0].x, pathHistory[0].y);
+        ctx.moveTo(activePath[0].x, activePath[0].y);
 
-        for (let i = 1; i < pathHistory.length; i++) {
-          ctx.lineTo(pathHistory[i].x, pathHistory[i].y);
+        for (let i = 1; i < activePath.length; i++) {
+          ctx.lineTo(activePath[i].x, activePath[i].y);
         }
         ctx.stroke();
       }
 
-      // Draw glowing leading head (Video game pulse cursor)
+      // Render Pulse Head Dot
       ctx.fillStyle = '#ffffff';
       ctx.shadowColor = '#00d9ff';
       ctx.shadowBlur = 18;
       ctx.beginPath();
-      ctx.arc(headX, headY, 9, 0, Math.PI * 2);
+      ctx.arc(headX, headY, 8, 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0; // Reset shadow blur
+      ctx.shadowBlur = 0;
 
       animationFrameId = requestAnimationFrame(runAnimation);
     }
