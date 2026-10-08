@@ -15,11 +15,11 @@
     html, body {
       width: 100%;
       min-height: 100vh;
-      min-height: 100dvh; /* Dynamic viewport height for mobile browser bars */
+      min-height: 100dvh;
       background-color: #040d1a;
       color: #ffffff;
       overflow-x: hidden;
-      overflow-y: auto; /* Enables scrolling on small mobile screens */
+      overflow-y: auto;
     }
 
     body {
@@ -50,7 +50,7 @@
       display: flex;
       flex-direction: column;
       gap: 4px;
-      flex: 1 1 140px; /* Responsive sizing for small screens */
+      flex: 1 1 130px;
     }
 
     label {
@@ -199,6 +199,14 @@
       </select>
     </div>
 
+    <div class="control-group">
+      <label for="metronomeSelect">Metronome</label>
+      <select id="metronomeSelect">
+        <option value="off" selected>Off</option>
+        <option value="on">On (1s Beep)</option>
+      </select>
+    </div>
+
     <div class="button-group">
       <button id="startPauseBtn">START</button>
       <button id="resetBtn" class="btn-reset">RESET</button>
@@ -237,7 +245,7 @@
       }
     }
 
-    function playBeep(frequency = 880, duration = 0.15) {
+    function playBeep(frequency = 880, duration = 0.15, gainVal = 0.15) {
       if (!audioCtx) return;
       try {
         const osc = audioCtx.createOscillator();
@@ -245,7 +253,7 @@
         osc.type = 'sine';
         osc.frequency.setValueAtTime(frequency, audioCtx.currentTime);
         
-        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.setValueAtTime(gainVal, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
 
         osc.connect(gain);
@@ -271,6 +279,7 @@
     const resetBtn = document.getElementById('resetBtn');
     const tempoSelect = document.getElementById('tempoSelect');
     const durationSelect = document.getElementById('durationSelect');
+    const metronomeSelect = document.getElementById('metronomeSelect');
     const countdownDisplay = document.getElementById('countdownDisplay');
     const completeDisplay = document.getElementById('completeDisplay');
     const phaseText = document.getElementById('phaseText');
@@ -393,6 +402,11 @@
 
         timeRemaining--;
         timeText.innerText = timeRemaining + 's';
+
+        // Check Metronome Option
+        if (metronomeSelect.value === 'on' && timeRemaining > 0 && timeRemaining !== halfwayPoint) {
+          playBeep(600, 0.08, 0.08); // Subtle 1s tick
+        }
 
         if (timeRemaining === halfwayPoint && !halfwayTriggered && timeRemaining > 0) {
           halfwayTriggered = true;
