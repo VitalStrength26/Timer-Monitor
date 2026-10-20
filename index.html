@@ -3,7 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>EKG Tempo Guide</title>
+  
+  <!-- Method 1: Block Search Engine Indexing -->
+  <meta name="robots" content="noindex, nofollow">
+  
+  <!-- Progressive Web App (PWA) Settings -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#040d1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <title>Vital Strength Tempo Timer</title>
   <style>
     * {
       box-sizing: border-box;
@@ -233,6 +243,11 @@
   </div>
 
   <script>
+    // Service Worker Registration for PWA support
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(err => console.error(err));
+    }
+
     // Audio Context
     let audioCtx = null;
 
@@ -403,9 +418,9 @@
         timeRemaining--;
         timeText.innerText = timeRemaining + 's';
 
-        // Check Metronome Option
+        // Metronome 1s Tick
         if (metronomeSelect.value === 'on' && timeRemaining > 0 && timeRemaining !== halfwayPoint) {
-          playBeep(600, 0.08, 0.08); // Subtle 1s tick
+          playBeep(600, 0.08, 0.08);
         }
 
         if (timeRemaining === halfwayPoint && !halfwayTriggered && timeRemaining > 0) {
@@ -458,9 +473,8 @@
       if (state !== 'RUNNING') return;
 
       const [concentric, eccentric] = tempoSelect.value.split('-').map(Number);
-      const crestTime = 0.5;
-      const valleyTime = 0.5;
-      const totalCycleTime = concentric + crestTime + eccentric + valleyTime;
+      // Pure cadence timings without hold delays
+      const totalCycleTime = concentric + eccentric;
 
       const now = performance.now();
       const elapsedTotal = (now - cycleStartTime - pausedTimeAccumulated) / 1000;
@@ -479,18 +493,18 @@
       let headX = startX + (currentCyclePos / totalCycleTime) * travelWidth;
       let headY = bottomY;
 
+      // Pure continuous wave timing (2/4, 4/4, 8/8)
       if (currentCyclePos < concentric) {
+        // Concentric Phase: Smooth cosine curve climb
         const progress = currentCyclePos / concentric;
         headY = bottomY - (1 - Math.cos(progress * Math.PI)) * 0.5 * (bottomY - topY);
-      } else if (currentCyclePos < concentric + crestTime) {
-        headY = topY;
-      } else if (currentCyclePos < concentric + crestTime + eccentric) {
-        const progress = (currentCyclePos - (concentric + crestTime)) / eccentric;
-        headY = topY + (1 - Math.cos(progress * Math.PI)) * 0.5 * (bottomY - topY);
       } else {
-        headY = bottomY;
+        // Eccentric Phase: Smooth cosine curve descent
+        const progress = (currentCyclePos - concentric) / eccentric;
+        headY = topY + (1 - Math.cos(progress * Math.PI)) * 0.5 * (bottomY - topY);
       }
 
+      // Check for wrap-around to store ghost path
       if (activePath.length > 1 && headX < activePath[activePath.length - 1].x) {
         ghostPaths.push({ points: activePath, alpha: 0.35 });
         activePath = [];
@@ -500,6 +514,7 @@
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // Render Ghost Paths
       for (let g = ghostPaths.length - 1; g >= 0; g--) {
         const ghost = ghostPaths[g];
         ghost.alpha -= 0.003;
@@ -519,6 +534,7 @@
         ctx.stroke();
       }
 
+      // Render Active Wave
       if (activePath.length > 1) {
         ctx.lineWidth = 6;
         ctx.strokeStyle = '#00d9ff';
@@ -533,6 +549,7 @@
         ctx.stroke();
       }
 
+      // Pulse Head Dot
       ctx.fillStyle = '#ffffff';
       ctx.shadowColor = '#00d9ff';
       ctx.shadowBlur = 18;
