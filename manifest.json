@@ -1,6 +1,6 @@
 {
-  "name": "Vital Strength Tempo Timer",
-  "short_name": "TempoTimer",
+  "name": "Vital Strength ExerciseAssist™",
+  "short_name": "ExerciseAssist",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "landscape",
