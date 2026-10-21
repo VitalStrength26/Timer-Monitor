@@ -52,7 +52,7 @@
       align-items: center;
       background: rgba(2, 8, 19, 0.85);
       padding: 10px 14px;
-      border: 1px solid rgba(74, 119, 166, 0.3);
+      border: 1px solid rgba(0, 128, 255, 0.3);
       border-radius: 8px;
     }
 
@@ -67,13 +67,13 @@
       font-size: 0.7rem;
       text-transform: uppercase;
       letter-spacing: 1px;
-      color: #4A77A6;
+      color: #0080FF;
     }
 
     select, button {
       background: #020813;
-      color: #4A77A6;
-      border: 1px solid #4A77A6;
+      color: #0080FF;
+      border: 1px solid #0080FF;
       padding: 8px 12px;
       border-radius: 6px;
       font-size: 0.95rem;
@@ -90,7 +90,7 @@
     }
 
     button {
-      background: #4A77A6;
+      background: #0080FF;
       color: #ffffff;
       cursor: pointer;
       transition: all 0.2s ease;
@@ -98,7 +98,7 @@
     }
 
     button:hover {
-      box-shadow: 0 0 12px #4A77A6;
+      box-shadow: 0 0 12px #0080FF;
     }
 
     button.btn-reset {
@@ -121,13 +121,13 @@
       min-height: 250px;
       background-color: #020813;
       background-image: 
-        linear-gradient(rgba(74, 119, 166, 0.15) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(74, 119, 166, 0.15) 1px, transparent 1px);
+        linear-gradient(rgba(0, 128, 255, 0.15) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 128, 255, 0.15) 1px, transparent 1px);
       background-size: 30px 30px;
       background-position: 0px 0px;
-      border: 2px solid #4A77A6;
+      border: 2px solid #0080FF;
       border-radius: 12px;
-      box-shadow: 0 0 25px rgba(74, 119, 166, 0.3);
+      box-shadow: 0 0 25px rgba(0, 128, 255, 0.3);
       overflow: hidden;
       display: flex;
       justify-content: center;
@@ -138,7 +138,7 @@
     canvas {
       width: 100%;
       height: 100%;
-      filter: drop-shadow(0px 0px 10px #4A77A6);
+      filter: drop-shadow(0px 0px 10px #0080FF);
     }
 
     /* Overlay Displays */
@@ -146,20 +146,20 @@
       position: absolute;
       font-weight: 900;
       text-transform: uppercase;
-      text-shadow: 0 0 20px #4A77A6;
+      text-shadow: 0 0 20px #0080FF;
       pointer-events: none;
       display: none;
     }
 
     #countdownDisplay {
       font-size: 6rem;
-      color: #4A77A6;
+      color: #0080FF;
     }
 
     #completeDisplay {
       font-size: 3rem;
-      color: #00ff88;
-      text-shadow: 0 0 20px #00ff88;
+      color: #0080FF;
+      text-shadow: 0 0 20px #0080FF;
       text-align: center;
     }
 
@@ -170,7 +170,7 @@
       display: flex;
       justify-content: space-around;
       background: rgba(2, 8, 19, 0.85);
-      border: 1px solid rgba(74, 119, 166, 0.3);
+      border: 1px solid rgba(0, 128, 255, 0.3);
       padding: 10px;
       border-radius: 8px;
     }
@@ -182,7 +182,7 @@
     .readout-value {
       font-size: 1.6rem;
       font-weight: bold;
-      color: #4A77A6;
+      color: #0080FF;
       font-family: monospace;
     }
   </style>
@@ -194,9 +194,9 @@
     <div class="control-group">
       <label for="tempoSelect">Rep Tempo</label>
       <select id="tempoSelect">
-        <option value="2-4">Power (2/4)</option>
-        <option value="4-4" selected>Strength (4/4)</option>
-        <option value="8-8">Medical (8/8)</option>
+        <option value="2-3">Power (2/3)</option>
+        <option value="5-5" selected>Strength (5/5)</option>
+        <option value="10-10">Medical (10/10)</option>
       </select>
     </div>
 
@@ -281,9 +281,10 @@
       }
     }
 
-    function playDoubleBeep() {
-      playBeep(880, 0.12);
-      setTimeout(() => playBeep(880, 0.12), 180);
+    function playEndDoubleBeep() {
+      // Two long 1.0 second beeps indicating the round is over
+      playBeep(880, 1.0, 0.2);
+      setTimeout(() => playBeep(880, 1.0, 0.2), 1200);
     }
 
     // Elements
@@ -307,8 +308,6 @@
 
     let totalDuration = 90;
     let timeRemaining = 90;
-    let halfwayPoint = 45;
-    let halfwayTriggered = false;
 
     let prepTime = 3;
     let prepInterval = null;
@@ -337,8 +336,6 @@
 
       totalDuration = parseInt(durationSelect.value);
       timeRemaining = totalDuration;
-      halfwayPoint = Math.floor(totalDuration / 2);
-      halfwayTriggered = false;
 
       timeText.innerText = timeRemaining + 's';
       phaseText.innerText = 'READY';
@@ -419,13 +416,8 @@
         timeText.innerText = timeRemaining + 's';
 
         // Metronome 1s Tick
-        if (metronomeSelect.value === 'on' && timeRemaining > 0 && timeRemaining !== halfwayPoint) {
+        if (metronomeSelect.value === 'on' && timeRemaining > 0) {
           playBeep(600, 0.08, 0.08);
-        }
-
-        if (timeRemaining === halfwayPoint && !halfwayTriggered && timeRemaining > 0) {
-          halfwayTriggered = true;
-          playDoubleBeep();
         }
 
         if (timeRemaining <= 0) {
@@ -458,12 +450,12 @@
       completeDisplay.style.display = 'block';
       startPauseBtn.innerText = 'START';
 
-      playBeep(659.25, 0.8);
+      playEndDoubleBeep();
     }
 
     function drawStaticStartDot() {
       const bottomY = canvas.height * 0.82;
-      ctx.fillStyle = '#4A77A6';
+      ctx.fillStyle = '#0080FF';
       ctx.beginPath();
       ctx.arc(0, bottomY, 8, 0, Math.PI * 2);
       ctx.fill();
@@ -509,7 +501,7 @@
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Render Ghost Paths with Moderate Blue Alpha
+      // Render Ghost Paths with Electric Sapphire Alpha
       for (let g = ghostPaths.length - 1; g >= 0; g--) {
         const ghost = ghostPaths[g];
         ghost.alpha -= 0.003;
@@ -520,7 +512,7 @@
         }
 
         ctx.lineWidth = 4;
-        ctx.strokeStyle = `rgba(74, 119, 166, ${ghost.alpha})`;
+        ctx.strokeStyle = `rgba(0, 128, 255, ${ghost.alpha})`;
         ctx.beginPath();
         ctx.moveTo(ghost.points[0].x, ghost.points[0].y);
         for (let i = 1; i < ghost.points.length; i++) {
@@ -532,7 +524,7 @@
       // Render Active Wave
       if (activePath.length > 1) {
         ctx.lineWidth = 6;
-        ctx.strokeStyle = '#4A77A6';
+        ctx.strokeStyle = '#0080FF';
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.beginPath();
@@ -546,7 +538,7 @@
 
       // Pulse Head Dot
       ctx.fillStyle = '#ffffff';
-      ctx.shadowColor = '#4A77A6';
+      ctx.shadowColor = '#0080FF';
       ctx.shadowBlur = 18;
       ctx.beginPath();
       ctx.arc(headX, headY, 8, 0, Math.PI * 2);
