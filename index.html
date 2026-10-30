@@ -70,9 +70,9 @@
       color: #0080FF;
     }
 
-    select, button {
+    select {
       background: #020813;
-      color: #0080FF;
+      color: #ffffff;
       border: 1px solid #0080FF;
       padding: 8px 12px;
       border-radius: 6px;
@@ -80,6 +80,11 @@
       font-weight: bold;
       outline: none;
       width: 100%;
+    }
+
+    select option {
+      background: #020813;
+      color: #ffffff;
     }
 
     .button-group {
@@ -92,6 +97,13 @@
     button {
       background: #0080FF;
       color: #ffffff;
+      border: 1px solid #0080FF;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-weight: bold;
+      outline: none;
+      width: 100%;
       cursor: pointer;
       transition: all 0.2s ease;
       margin-top: auto;
@@ -182,7 +194,7 @@
     .readout-value {
       font-size: 1.6rem;
       font-weight: bold;
-      color: #0080FF;
+      color: #ffffff;
       font-family: monospace;
     }
   </style>
@@ -194,7 +206,7 @@
     <div class="control-group">
       <label for="tempoSelect">Rep Tempo</label>
       <select id="tempoSelect">
-        <option value="2-3">Power (2/3)</option>
+        <option value="2-4">Power (2/4)</option>
         <option value="5-5" selected>Strength (5/5)</option>
         <option value="10-10">Medical (10/10)</option>
       </select>
@@ -212,8 +224,8 @@
     <div class="control-group">
       <label for="metronomeSelect">Metronome</label>
       <select id="metronomeSelect">
-        <option value="off" selected>Off</option>
-        <option value="on">On (1s Beep)</option>
+        <option value="on" selected>On (1s Beep)</option>
+        <option value="off">Off</option>
       </select>
     </div>
 
@@ -282,7 +294,6 @@
     }
 
     function playEndDoubleBeep() {
-      // Two long 1.0 second beeps indicating the round is over
       playBeep(880, 1.0, 0.2);
       setTimeout(() => playBeep(880, 1.0, 0.2), 1200);
     }
@@ -354,6 +365,21 @@
       resizeCanvas();
     }
 
+    // Auto-select paired duration based on selected tempo
+    tempoSelect.addEventListener('change', () => {
+      const tempoToDurationMap = {
+        '2-4': '60',
+        '5-5': '90',
+        '10-10': '120'
+      };
+
+      const matchedDuration = tempoToDurationMap[tempoSelect.value];
+      if (matchedDuration) {
+        durationSelect.value = matchedDuration;
+      }
+      resetApp();
+    });
+
     durationSelect.addEventListener('change', resetApp);
     resetBtn.addEventListener('click', resetApp);
 
@@ -415,7 +441,7 @@
         timeRemaining--;
         timeText.innerText = timeRemaining + 's';
 
-        // Metronome 1s Tick
+        // 1-second metronome tick
         if (metronomeSelect.value === 'on' && timeRemaining > 0) {
           playBeep(600, 0.08, 0.08);
         }
@@ -501,7 +527,6 @@
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Render Ghost Paths with Electric Sapphire Alpha
       for (let g = ghostPaths.length - 1; g >= 0; g--) {
         const ghost = ghostPaths[g];
         ghost.alpha -= 0.003;
@@ -521,7 +546,6 @@
         ctx.stroke();
       }
 
-      // Render Active Wave
       if (activePath.length > 1) {
         ctx.lineWidth = 6;
         ctx.strokeStyle = '#0080FF';
@@ -536,7 +560,6 @@
         ctx.stroke();
       }
 
-      // Pulse Head Dot
       ctx.fillStyle = '#ffffff';
       ctx.shadowColor = '#0080FF';
       ctx.shadowBlur = 18;
